@@ -63,36 +63,43 @@ CREATE TABLE projet.reservation_tickets(
 
 CREATE OR REPLACE FUNCTION projet.trigger_reservation () RETURNS TRIGGER AS $$
 DECLARE
+	old_nb_tickets INTEGER;
 	record RECORD;
 BEGIN
-	#Si le client a déjà réservé des tickets pour un autre événement se déroulant à la même date.
+	--Si le client a déjà réservé des tickets pour un autre événement se déroulant à la même date.
 	IF EXISTS(SELECT * FROM projet.reservations r, projet.evenements e
 			WHERE r.id_evenement = e.id_evenement)
 		RAISE 'client a deja reserve pour un evenement a la meme date';
 	END IF;
 
-	#Si le nombre de tickets demandés est plus grand que le nombre de tickets encore disponibles pour cet événement
+	--Si le nombre de tickets demandés est plus grand que le nombre de tickets encore disponibles pour cet événement
 	IF (NEW.nb_tickets > (SELECT SUM(r.nb_tickets) - s.capacite FROM projet.reservations r, projet.evenements e, projet.salles s
 				WHERE r.id_evenement = e.id_evenement AND e.id_salle = s.id_salle))
 		RAISE 'pas assez de clients disponibles';
 	ENF IF;
 
-	#Si le nombre total de tickets réservés par le cilent pour l'événement est supérieur à 4
+	--Si le nombre total de tickets réservés par le cilent pour événement est supérieur à 4
 	IF (NEW.nb_tickets + (SELECT SUM(r.nb_tickets) FROM projet.reservations r
 			WHERE r.id_evenement = NEW.id_evenement) > 4)
 		RAISE 'trop de tickets';
 	END IF;
 
-	#Si l'événement ne contient pas encore de concert (événement pas finalisé)
+	--Si événement ne contient pas encore de concert (événement pas finalisé)
 	IF NOT EXISTS(SELECT * FROM projet.concerts c, reservations r
 			WHERE r.id_evenement = c.id_evenement)
-		RAISE 'cet evenement n'a pas encore de concert';
+		RAISE 'cet evenement na pas encore de concert';
 	END IF;
 
-	#Si l'événement est déjà passé
+	--Si l'événement est déjà passé
 	IF (NOW() > (SELECT e.date FROM projet.evenements WHERE e.id_evenement = NEW.id_evenement))
 		RAISE 'evenement deja passe';
 	END IF;
+
+	--UPDATE du nombre de tickets reserves pour un événement
+	old_nb_tickets:=(SELECT e.nb_tickets_vendus FROM projet.evenements e
+					WHERE e.id_evenement = NEW.id_evenement)
+	UPDATE(projet.evenements) SET nb_tickets_reserves = old_nb_tickets+NEW.nb_tickets_reserves WHERE id_evenement=NEW.id_evenement
+
 END;
 $$ LANGUAGE plpgsql;
 
