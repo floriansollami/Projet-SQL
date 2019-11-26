@@ -55,10 +55,29 @@ CREATE TABLE projet.reservation_tickets(
 	id_reservation SERIAL,
 	id_evenement INTEGER NOT NULL REFERENCES projet.evenements(id_evenement),
 	id_client INTEGER NOT NULL REFERENCES projet.clients(id_client),
-	nb_tickets_reserves INTEGER NOT NULL CHECK (nb_tickets_reserves BETWEEN 1 AND 4), -- PAS  SUFFISANT VERIFIER EN +
+	nb_tickets_reserves INTEGER NOT NULL DEFAULT 0 CHECK (nb_tickets_reserves BETWEEN 1 AND 4), -- PAS  SUFFISANT VERIFIER EN +
 	PRIMARY KEY(id_evenement, id_reservation)
 );
 
+
+CREATE OR REPLACE FUNCTION projet.ajouter_salles (projet.salles.nom%TYPE, projet.salles.nationalite%TYPE) 
+
+RETURNS projet.salles.id_artiste%TYPE 
+AS $$
+DECLARE 
+       nom_artiste ALIAS FOR $1;
+       nationalite_artiste ALIAS FOR $2;
+       no_artiste INTEGER; 
+BEGIN
+     INSERT INTO projet.salles VALUES (DEFAULT, nom_utilisateur) RETURNING id_artiste INTO no_artiste;
+     
+     RETURN id_utilisateur;
+END ; 
+$$ LANGUAGE plpgsql;
+
+
+
+-----------------------------------------------------------------------------------
 #TRIGGERS
 
 CREATE OR REPLACE FUNCTION projet.trigger_reservation () RETURNS TRIGGER AS $$
