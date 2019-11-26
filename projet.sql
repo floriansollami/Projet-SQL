@@ -137,6 +137,7 @@ BEGIN
 END ; 
 $$ LANGUAGE plpgsql;
 
+<<<<<<< Updated upstream
 -- AJOUTER CONCERT
 CREATE OR REPLACE FUNCTION projet.ajouter_concert(
 	projet.concerts.heure_debut%TYPE, 
@@ -204,15 +205,40 @@ BEGIN
      
      RETURN no_reservation;
 END ; 
+=======
+--Visualiser la liste  des artistes triés par nombre de tickets réservés
+CREATE OR REPLACE FUNCTION projet.visualiser_artistes () RETURNS INTEGER AS $$
+DECLARE 
+BEGIN
+	SELECT *
+	FROM projet.artistes a
+	ORDER BY a.nb_tickets_reserves
+	RETURN 1;
+END;
+>>>>>>> Stashed changes
 $$ LANGUAGE plpgsql;
 
+--Afficher evenements entre 2 dates données
+CREATE OR REPLACE FUNCTION projet.afficher_evenements (projet.evenements.date%TYPE, projet.evenements.date%TYPE) RETURNS INTEGER AS $$
+DECLARE
+	date_1 ALIAS FOR $1;
+	date_2 ALIAS FOR $2;
+BEGIN
+	SELECT e.nom, e.date_evenement, s.nom, f.nom, e.nb_tickets_vendus
+	FROM projet.evenements e LEFT OUTER JOIN festivals f ON e.id_festival = f.id_festival, salles s
+	WHERE (e.date_evenement > date_1 AND e.date_evenement < date_2) AND s.id_salle = e.id_salle
+	ORDER BY e.date_evenement ASC
+	RETURN 1;
+END;
+$$ LANGUAGE plpgsql;
 
 -----------------------------------------------------------------------------------
 #TRIGGERS
 
 CREATE OR REPLACE FUNCTION projet.trigger_reservation () RETURNS TRIGGER AS $$
 DECLARE
-	old_nb_tickets INTEGER;
+	old_nb_tickets_evenements INTEGER;
+	old_nb_tickets_artistes INTEGER;
 	record RECORD;
 BEGIN
 	--Si le client a déjà réservé des tickets pour un autre événement se déroulant à la même date.
@@ -245,9 +271,15 @@ BEGIN
 	END IF;
 
 	--UPDATE du nombre de tickets reserves pour un événement
-	old_nb_tickets:=(SELECT e.nb_tickets_vendus FROM projet.evenements e
+	old_nb_tickets_evenements:=(SELECT e.nb_tickets_vendus FROM projet.evenements e
 					WHERE e.id_evenement = NEW.id_evenement)
-	UPDATE(projet.evenements) SET nb_tickets_reserves = old_nb_tickets+NEW.nb_tickets_reserves WHERE id_evenement=NEW.id_evenement
+	UPDATE(projet.evenements) SET nb_tickets_reserves = old_nb_tickets_evenements+NEW.nb_tickets_reserves WHERE id_evenement=NEW.id_evenement
+
+	--UPDATE du nombre de tickets total pour un artiste
+	old_nb_tickets_artistes:=(SELECT a.nb_tickets_reserves FROM projet.artistes a
+					WHERE e.id_evenement = NEW.id_evenement)
+	UPDATE(projet.evenements) SET nb_tickets_reserves = old_nb_tickets_artistes+NEW.nb_tickets_reserves WHERE id_evenement=NEW.id_evenement
+
 
 END;
 $$ LANGUAGE plpgsql;
