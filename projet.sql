@@ -51,7 +51,7 @@ CREATE TABLE projet.clients(
 	sel VARCHAR(255) NOT NULL
 );
 
-CREATE TABLE projet.reservation_tickets(
+CREATE TABLE projet.reservations(
 	id_reservation SERIAL,
 	id_evenement INTEGER NOT NULL REFERENCES projet.evenements(id_evenement),
 	id_client INTEGER NOT NULL REFERENCES projet.clients(id_client),
@@ -59,22 +59,152 @@ CREATE TABLE projet.reservation_tickets(
 	PRIMARY KEY(id_evenement, id_reservation)
 );
 
+----------------------------------------------------------------------------------------------------------------------------------------
+-- AJOUTER FESTIVAL
+CREATE OR REPLACE FUNCTION projet.ajouter_festival(projet.festivals.nom%TYPE) 
+RETURNS projet.festivals.id_festival%TYPE 
+AS $$
+DECLARE 
+       nom_festival ALIAS FOR $1;
+       no_festival INTEGER; 
+BEGIN
+     INSERT INTO projet.festivals VALUES (DEFAULT, nom_festival) RETURNING id_festival INTO no_festival;
+     
+     RETURN no_festival;
+END ; 
+$$ LANGUAGE plpgsql;
 
-CREATE OR REPLACE FUNCTION projet.ajouter_salles (projet.salles.nom%TYPE, projet.salles.nationalite%TYPE) 
+-- AJOUTER SALLE
+CREATE OR REPLACE FUNCTION projet.ajouter_salle(
+	projet.salles.nom%TYPE,
+	projet.salles.ville%TYPE,
+	projet.salles.capacite%TYPE
+	) 
+RETURNS projet.salles.id_salle%TYPE 
+AS $$
+DECLARE 
+       nom_salle ALIAS FOR $1;
+	   ville_salle ALIAS FOR $2;
+	   capacite_salle ALIAS FOR $2;
+       no_salle INTEGER; 
+BEGIN
+     INSERT INTO projet.salles VALUES (DEFAULT, nom_salle, ville_salle, capacite_salle) RETURNING id_salle INTO no_salle;
+     
+     RETURN no_salle;
+END ; 
+$$ LANGUAGE plpgsql;
 
-RETURNS projet.salles.id_artiste%TYPE 
+-- AJOUTER EVENEMENT 
+CREATE OR REPLACE FUNCTION projet.ajouter_evenement(
+	projet.evenements.nom%TYPE, 
+	projet.evenements.date_evenement%TYPE,
+	projet.evenements.prix%TYPE,
+	projet.evenements.id_festival%TYPE,
+	projet.evenements.id_salle%TYPE,
+	) 
+
+RETURNS projet.evenements.id_evenement%TYPE 
+AS $$
+DECLARE 
+       nom_evenement ALIAS FOR $1;
+       date ALIAS FOR $2;
+	   prix_evenement ALIAS FOR $2;
+	   no_festival ALIAS FOR $3;
+	   no_salle ALIAS FOR $4;
+       no_evenement INTEGER; 
+BEGIN
+     INSERT INTO projet.evenements 
+	 VALUES (DEFAULT, nom_evenement, date, prix_evenement, no_festival, no_salle, DEFAULT, DEFAULT) 
+	 RETURNING id_evenement INTO no_evenement;
+     
+     RETURN no_evenement;
+END ; 
+$$ LANGUAGE plpgsql;
+
+-- AJOUTER ARTISTE
+CREATE OR REPLACE FUNCTION projet.ajouter_artiste(projet.artistes.nom%TYPE, projet.artistes.nationalite%TYPE) 
+
+RETURNS projet.artistes.id_artiste%TYPE 
 AS $$
 DECLARE 
        nom_artiste ALIAS FOR $1;
        nationalite_artiste ALIAS FOR $2;
        no_artiste INTEGER; 
 BEGIN
-     INSERT INTO projet.salles VALUES (DEFAULT, nom_utilisateur) RETURNING id_artiste INTO no_artiste;
+     INSERT INTO projet.artistes VALUES (DEFAULT, nom_artiste, nationalite_artiste, DEFAULT) RETURNING id_artiste INTO no_artiste;
      
-     RETURN id_utilisateur;
+     RETURN no_artiste;
 END ; 
 $$ LANGUAGE plpgsql;
 
+-- AJOUTER CONCERT
+CREATE OR REPLACE FUNCTION projet.ajouter_concert(
+	projet.concerts.heure_debut%TYPE, 
+	projet.concerts.id_evenement%TYPE,
+	projet.concerts.id_artiste%TYPE,
+	) 
+RETURNS projet.concerts.id_concert%TYPE 
+AS $$
+DECLARE 
+       heure_debut_concert ALIAS FOR $1;
+       no_evenement ALIAS FOR $2;
+	   no_artiste ALIAS FOR $3;
+
+       no_concert INTEGER; 
+BEGIN
+     INSERT INTO projet.concerts VALUES (DEFAULT, heure_debut_concert, no_evenement, no_artiste) 
+	 RETURNING id_concert INTO no_concert;
+     
+     RETURN no_concert;
+END ; 
+$$ LANGUAGE plpgsql;
+
+
+-- AJOUTER CLIENT
+CREATE OR REPLACE FUNCTION projet.ajouter_client(
+	projet.clients.email%TYPE, 
+	projet.clients.nom_utilisateur%TYPE,
+	projet.clients.mot_de_passe%TYPE,
+	projet.clients.sel%TYPE,
+	) 
+RETURNS projet.clients.id_client%TYPE 
+AS $$
+DECLARE 
+       email_client ALIAS FOR $1;
+       nom_utilisateur_client ALIAS FOR $2;
+	   mot_de_passe_client ALIAS FOR $3;
+	   sel_client ALIAS FOR $4;
+
+       no_client INTEGER; 
+BEGIN
+     INSERT INTO projet.clients VALUES (DEFAULT, email_client, nom_utilisateur_client, mot_de_passe_client, sel_client) 
+	 RETURNING id_client INTO no_client;
+     
+     RETURN no_client;
+END ; 
+$$ LANGUAGE plpgsql;
+
+-- AJOUTER RESERVATION
+CREATE OR REPLACE FUNCTION projet.ajouter_reservation(
+	projet.reservations.id_evenement%TYPE, 
+	projet.reservations.id_client%TYPE,
+	projet.reservations.nb_tickets_reserves%TYPE,
+	) 
+RETURNS projet.reservations.id_reservation%TYPE 
+AS $$
+DECLARE 
+       no_evenement ALIAS FOR $1;
+       no_client ALIAS FOR $2;
+	   tickets_reserves ALIAS FOR $3;
+
+       no_reservation INTEGER; 
+BEGIN
+     INSERT INTO projet.reservations VALUES (DEFAULT, no_evenement, no_client, tickets_reserves) 
+	 RETURNING id_reservation INTO no_reservation;
+     
+     RETURN no_reservation;
+END ; 
+$$ LANGUAGE plpgsql;
 
 
 -----------------------------------------------------------------------------------
