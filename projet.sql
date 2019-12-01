@@ -137,7 +137,6 @@ BEGIN
 END ; 
 $$ LANGUAGE plpgsql;
 
-<<<<<<< Updated upstream
 -- AJOUTER CONCERT
 CREATE OR REPLACE FUNCTION projet.ajouter_concert(
 	projet.concerts.heure_debut%TYPE, 
@@ -205,7 +204,7 @@ BEGIN
      
      RETURN no_reservation;
 END ; 
-=======
+
 --Visualiser la liste  des artistes triés par nombre de tickets réservés
 CREATE OR REPLACE FUNCTION projet.visualiser_artistes () RETURNS INTEGER AS $$
 DECLARE 
@@ -215,7 +214,6 @@ BEGIN
 	ORDER BY a.nb_tickets_reserves
 	RETURN 1;
 END;
->>>>>>> Stashed changes
 $$ LANGUAGE plpgsql;
 
 --Afficher evenements entre 2 dates données
