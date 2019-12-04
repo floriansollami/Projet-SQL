@@ -137,7 +137,6 @@ BEGIN
 END ; 
 $$ LANGUAGE plpgsql;
 
-<<<<<<< Updated upstream
 -- AJOUTER CONCERT
 CREATE OR REPLACE FUNCTION projet.ajouter_concert(
 	projet.concerts.heure_debut%TYPE, 
@@ -205,7 +204,8 @@ BEGIN
      
      RETURN no_reservation;
 END ; 
-=======
+
+
 --Visualiser la liste  des artistes triés par nombre de tickets réservés
 CREATE OR REPLACE FUNCTION projet.visualiser_artistes () RETURNS INTEGER AS $$
 DECLARE 
@@ -215,7 +215,6 @@ BEGIN
 	ORDER BY a.nb_tickets_reserves
 	RETURN 1;
 END;
->>>>>>> Stashed changes
 $$ LANGUAGE plpgsql;
 
 --Afficher evenements entre 2 dates données
@@ -278,7 +277,7 @@ BEGIN
 	--UPDATE du nombre de tickets total pour un artiste
 	old_nb_tickets_artistes:=(SELECT a.nb_tickets_reserves FROM projet.artistes a
 					WHERE e.id_evenement = NEW.id_evenement)
-	UPDATE(projet.evenements) SET nb_tickets_reserves = old_nb_tickets_artistes+NEW.nb_tickets_reserves WHERE id_evenement=NEW.id_evenement
+	UPDATE(projet.artistes) SET nb_tickets_reserves = old_nb_tickets_artistes+NEW.nb_tickets_reserves WHERE id_evenement=NEW.id_evenement
 
 
 END;
@@ -286,3 +285,4 @@ $$ LANGUAGE plpgsql;
 
 CREATE TRIGGER projet.trigger_reservation AFTER INSERT ON projet.reservations
 	FOR EACH ROW EXECUTE PROCEDURE; //TODO
+
