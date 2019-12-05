@@ -20,8 +20,8 @@ CREATE TABLE projet.evenements(
 	prix NUMERIC (8, 2) NOT NULL CHECK(prix > 0),
 	id_festival INTEGER NULL REFERENCES projet.festivals(id_festival),
 	id_salle INTEGER NOT NULL REFERENCES projet.salles(id_salle),
-	nb_tickets_vendus INTEGER NOT NULL DEFAULT 0, -- <==== NE PAS OUBLIER lors de l'insert : nb_tickets_disponibles = projet.salles(capacite)
-	nb_concerts INTEGER NOT NULL DEFAULT 0,
+	nb_tickets_vendus INTEGER NOT NULL DEFAULT 0 CHECK (nb_tickets_vendus >= 0), 
+	nb_concerts INTEGER NOT NULL DEFAULT 0 CHECK (nb_concerts >= 0),
 
 	UNIQUE(date_evenement, id_salle)
 );
@@ -30,7 +30,7 @@ CREATE TABLE projet.artistes(
 	id_artiste SERIAL PRIMARY KEY,
 	nom VARCHAR(100) NOT NULL CHECK(nom<>''),
 	nationalite VARCHAR(100) NULL CHECK(nationalite<>''),
-	nb_tickets_reserves INTEGER NOT NULL DEFAULT 0 CHECK(nb_tickets_reserves>=0)
+	nb_tickets_reserves INTEGER NOT NULL DEFAULT 0 CHECK(nb_tickets_reserves >= 0)
 );
 
 CREATE TABLE projet.concerts(
@@ -54,7 +54,7 @@ CREATE TABLE projet.reservations(
 	id_reservation SERIAL,
 	id_evenement INTEGER NOT NULL REFERENCES projet.evenements(id_evenement),
 	id_client INTEGER NOT NULL REFERENCES projet.clients(id_client),
-	nb_tickets_reserves INTEGER NOT NULL DEFAULT 0 CHECK (nb_tickets_reserves BETWEEN 1 AND 4), 
+	nb_tickets_reserves INTEGER NOT NULL DEFAULT 0 CHECK(nb_tickets_reserves >= 0), 
 	prix_total NUMERIC (8, 2) NULL CHECK(prix_total > 0),
 	PRIMARY KEY(id_evenement, id_reservation)
 );
@@ -215,98 +215,46 @@ $$ LANGUAGE plpgsql;
 
 
 
---Visualiser la liste  des artistes triés par nombre de tickets réservés
-CREATE OR REPLACE FUNCTION projet.visualiser_artistes () RETURNS INTEGER AS $$
-DECLARE 
-BEGIN
-	SELECT *
-	FROM projet.artistes a
-	ORDER BY a.nb_tickets_reserves
-	RETURN 1;
-END;
-$$ LANGUAGE plpgsql;
-
---Afficher evenements entre 2 dates données
-CREATE OR REPLACE FUNCTION projet.afficher_evenements (projet.evenements.date%TYPE, projet.evenements.date%TYPE) RETURNS INTEGER AS $$
-DECLARE
-	date_1 ALIAS FOR $1;
-	date_2 ALIAS FOR $2;
-BEGIN
-	SELECT e.nom, e.date_evenement, s.nom, f.nom, e.nb_tickets_vendus
-	FROM projet.evenements e LEFT OUTER JOIN festivals f ON e.id_festival = f.id_festival, salles s
-	WHERE (e.date_evenement > date_1 AND e.date_evenement < date_2) AND s.id_salle = e.id_salle
-	ORDER BY e.date_evenement ASC
-	RETURN 1;
-END;
-$$ LANGUAGE plpgsql;
-
 
 ----TRIGGERS---------------------------------------------------------------------
 
-CREATE OR REPLACE FUNCTION projet.trigger_reservation () RETURNS TRIGGER AS $$
-DECLARE
-	old_nb_tickets_evenements INTEGER;
-	old_nb_tickets_artistes INTEGER;
-	record RECORD;
-BEGIN
-	--Si le client a déjà réservé des tickets pour un autre événement se déroulant à la même date.
-	IF EXISTS(SELECT * FROM projet.reservations r, projet.evenements e
-			WHERE r.id_evenement = e.id_evenement)
-		RAISE 'client a deja reserve pour un evenement a la meme date';
-	END IF;
 
-	--Si le nombre de tickets demandés est plus grand que le nombre de tickets encore disponibles pour cet événement
-	IF (NEW.nb_tickets > (SELECT SUM(r.nb_tickets) - s.capacite FROM projet.reservations r, projet.evenements e, projet.salles s
-				WHERE r.id_evenement = e.id_evenement AND e.id_salle = s.id_salle))
-		RAISE 'pas assez de clients disponibles';
-	ENF IF;
+-- Un artiste ne peut pas participer à 2 évènements qui se déroulent le même jour
+CREATE OR REPLACE FUNCTION projet.verifier_evenements_meme_jour() RETURNS TRIGGER   
+AS $$ 
+DECLARE 
+      date projet.evenements.date_evenement%TYPE;
+BEGIN 
+     -- La date de l'évènement pour laquelle on ajoute le concert (NEW)
+	 SELECT date_evenement FROM projet.evenements WHERE id_evenement = NEW.id_evenement INTO date;
 
-	--Si le nombre total de tickets réservés par le cilent pour événement est supérieur à 4
-	IF (NEW.nb_tickets + (SELECT SUM(r.nb_tickets) FROM projet.reservations r
-			WHERE r.id_evenement = NEW.id_evenement) > 4)
-		RAISE 'trop de tickets';
-	END IF;
+	 -- Tous les autres evenements à la meme date (que celle d'ajout) de cet artiste
+	 IF EXISTS (SELECT EV.id_evenement 
+					FROM projet.evenements EV, projet.concerts CO 
+					WHERE EV.id_evenement = CO.id_evenement
+	 				AND EV.date_evenement = date AND EV.id_evenement != NEW.id_evenement
+	 				AND CO.id_artiste = NEW.id_artiste) THEN
+        RAISE EXCEPTION 'Attention, un artiste ne peut pas participer à 2 évènements qui se déroulent le même jour.';
+	 END IF;
+	 
+     RETURN NEW; 
+END; 
+$$ LANGUAGE plpgsql; 
 
-	--Si événement ne contient pas encore de concert (événement pas finalisé)
-	IF NOT EXISTS(SELECT * FROM projet.concerts c, reservations r
-			WHERE r.id_evenement = c.id_evenement)
-		RAISE 'cet evenement na pas encore de concert';
-	END IF;
-
-	--Si l'événement est déjà passé
-	IF (NOW() > (SELECT e.date FROM projet.evenements WHERE e.id_evenement = NEW.id_evenement))
-		RAISE 'evenement deja passe';
-	END IF;
-
-	--UPDATE du nombre de tickets reserves pour un événement
-	old_nb_tickets_evenements:=(SELECT e.nb_tickets_vendus FROM projet.evenements e
-					WHERE e.id_evenement = NEW.id_evenement)
-	UPDATE(projet.evenements) SET nb_tickets_reserves = old_nb_tickets_evenements+NEW.nb_tickets_reserves WHERE id_evenement=NEW.id_evenement
-
-	--UPDATE du nombre de tickets total pour un artiste
-	old_nb_tickets_artistes:=(SELECT a.nb_tickets_reserves FROM projet.artistes a
-					WHERE e.id_evenement = NEW.id_evenement)
-	UPDATE(projet.artistes) SET nb_tickets_reserves = old_nb_tickets_artistes+NEW.nb_tickets_reserves WHERE id_evenement=NEW.id_evenement
+CREATE TRIGGER trigger_verifier_evenements_meme_jour 
+BEFORE INSERT ON projet.concerts 
+FOR EACH ROW  
+EXECUTE PROCEDURE projet.verifier_evenements_meme_jour(); 
 
 
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER projet.trigger_reservation AFTER INSERT ON projet.reservations
-	FOR EACH ROW EXECUTE PROCEDURE; //TODO
-	
-	
-	
+-- Incrémenter le nombre de concerts d'un évènement
 CREATE OR REPLACE FUNCTION projet.incrementer_nb_concerts() RETURNS TRIGGER   
 AS $$ 
 DECLARE 
        ancien_nb_concerts projet.evenements.nb_concerts%TYPE;
 BEGIN 
-      SELECT nb_concerts FROM projet.evenements 
-	  WHERE id_evenement = NEW.id_evenement INTO ancien_nb_concerts;
-	  
+      SELECT nb_concerts FROM projet.evenements WHERE id_evenement = NEW.id_evenement INTO ancien_nb_concerts;
 	  ancien_nb_concerts := ancien_nb_concerts + 1;
-	  
 	  UPDATE projet.evenements SET nb_concerts = ancien_nb_concerts WHERE id_evenement = NEW.id_evenement;
 
       RETURN NEW; 
@@ -319,21 +267,31 @@ FOR EACH ROW
 EXECUTE PROCEDURE projet.incrementer_nb_concerts(); 
 
 
-
+-- Incrémenter le nombre de tickets réservés d'un artiste
 CREATE OR REPLACE FUNCTION projet.incrementer_nb_tickets_reserves_artiste() RETURNS TRIGGER   
 AS $$ 
 DECLARE 
        record RECORD;
        ancien_nb_tickets_reserves projet.artistes.nb_tickets_reserves%TYPE;
 	   nouveau_nb_tickets_reserves projet.artistes.nb_tickets_reserves%TYPE;
+	   ancien_nb_tickets_vendus projet.evenements.nb_tickets_vendus%TYPE;
+	   nouveau_nb_tickets_vendus projet.evenements.nb_tickets_vendus%TYPE;
 BEGIN 
-     FOR record IN SELECT DISTINCT id_artiste FROM projet.concerts WHERE id_evenement = NEW.id_evenement -- j'ai fait distinct mais j'aime pas bizarre
+     -- mettre a jour aristes.nb_tickets_reserves
+     FOR record IN SELECT DISTINCT AR.id_artiste, AR.nb_tickets_reserves FROM projet.artistes AR, projet.concerts CO
+	 			   WHERE AR.id_artiste = CO.id_artiste
+	 			   AND CO.id_evenement = NEW.id_evenement 
 	 LOOP
-		 SELECT nb_tickets_reserves FROM projet.artistes WHERE id_artiste = record.id_artiste INTO ancien_nb_tickets_reserves;
-		 nouveau_nb_tickets_reserves := ancien_nb_tickets_reserves + NEW.nb_tickets_reserves;
-	 	 
-		 UPDATE projet.artistes SET nb_tickets_reserves = nouveau_nb_tickets_reserves WHERE id_artiste = record.id_artiste;
+	     nouveau_nb_tickets_reserves := record.nb_tickets_reserves + NEW.nb_tickets_reserves;
+	 	 UPDATE projet.artistes SET nb_tickets_reserves = nouveau_nb_tickets_reserves WHERE id_artiste = record.id_artiste;
      END LOOP;
+	 
+	 -- mettre a jour concerts.nb_tickets_vendus
+	 SELECT nb_tickets_vendus FROM projet.evenements WHERE id_evenement = NEW.id_evenement INTO ancien_nb_tickets_vendus;
+	 nouveau_nb_tickets_vendus := ancien_nb_tickets_vendus + NEW.nb_tickets_reserves;
+	 UPDATE projet.evenements SET nb_tickets_vendus = nouveau_nb_tickets_vendus WHERE id_evenement = NEW.id_evenement;
+	 
+	 
 	 
      RETURN NEW; 
 END; 
@@ -346,22 +304,66 @@ EXECUTE PROCEDURE projet.incrementer_nb_tickets_reserves_artiste();
 
 
 
--- Mettre a jour le prix total de la reservation après reservation de tickets
--- before insert ?
-CREATE OR REPLACE FUNCTION projet.calculer_prix_total_reservation() RETURNS TRIGGER   
+CREATE OR REPLACE FUNCTION projet.before_reservation() RETURNS TRIGGER   
 AS $$ 
 DECLARE 
-     
-BEGIN 
+       nb_tickets_deja_reserves projet.reservations.nb_tickets_reserves%TYPE;
+	   date projet.evenements.date_evenement%TYPE;
+	   capacite_salle projet.salles.capacite%TYPE;
+	   nb_tickets_vendus_evenement projet.evenements.nb_tickets_vendus%TYPE;
+	   
+BEGIN 	 
+	 -- -	Vérifier que l’ajout d’une réservation sur un évenement qui n’a pas de concert est impossible. 
+	 IF (SELECT nb_concerts FROM projet.evenements WHERE id_evenement = NEW.id_evenement) = 0 THEN
+	 	 RAISE EXCEPTION 'Attention, l’ajout d’une réservation sur un évenement qui n’a pas de concert est impossible.';
+	 END IF;
+	 	 
+	 -- Nombre de tickets déjà réservés pour le même évènement
+	 SELECT SUM(nb_tickets_reserves) FROM projet.reservations WHERE id_evenement = NEW.id_evenement 
+	 AND id_client = NEW.id_client AND id_reservation != NEW.id_reservation INTO nb_tickets_deja_reserves;
+	 	
+	 -- Nombre de tickets réservés jusqu'a présent + ceux souhaités est compris entre [1,4]	
+	 IF (nb_tickets_deja_reserves + NEW.nb_tickets_reserves) BETWEEN 1 AND 4 THEN
+	 	RAISE EXCEPTION 'Attention,  pour éviter la revente illégale de tickets, il est impossible de réserver plus de
+		4 tickets par personne par évènement. Rappel, 1 ticket minimum par réservation.';
+	 END IF;
+	 
+     -- Date de l'evenement de la réservation souhaitée	
+	 SELECT date_evenement FROM projet.evenements WHERE id_evenement = NEW.id_evenement INTO date;
+	 
+	 -- Vérifier si la personne a déjà réservé des tickets pour un autre évènement à la même date
+	 IF EXISTS (SELECT * FROM projet.reservations RE, projet.evenements EV 
+				WHERE RE.id_evenement = EV.id_evenement
+			    AND RE.id_client = NEW.id_client 
+				AND EV.date_evenement = date) THEN
+	 	RAISE EXCEPTION 'Attention, vous avez déjà reservé des tickets pour un autre évènement se déroulant à la même date.';
+	 END IF;
+	 
+	 
+	 SELECT SA.capacite, EV.nb_tickets_vendus FROM projet.salles SA, projet.evenements EV
+	 WHERE SA.id_salle = EV.id_salle AND EV.id_evenement = NEW.id_evenement INTO capacite_salle, nb_tickets_vendus_evenement;
+	 
+	 IF (nb_tickets_vendus_evenement + NEW.nb_tickets_reserves) > capacite_salle THEN
+	 	RAISE EXCEPTION 'Attention, le nombre de tickets demandés est plus grand que le nombre de tickets encore disponibles pour cet événement.';
+	 END IF;
+	 
+	 --Si l'événement est déjà passé
+	 IF (NOW() > (SELECT date_evenement FROM projet.evenements WHERE id_evenement = NEW.id_evenement)) THEN
+		RAISE EXCEPTION 'Attention, l''évènement est déjà passé.';
+	 END IF;
+	 
+	 -- Pré-calculer le prix total d'une réservation
      SELECT NEW.nb_tickets_reserves * prix FROM projet.evenements WHERE id_evenement = NEW.id_evenement INTO NEW.prix_total;
+	 
      RETURN NEW; 
 END; 
 $$ LANGUAGE plpgsql; 
 
-CREATE TRIGGER trigger_calculer_prix_total_reservation
+CREATE TRIGGER trigger_before_reservation
 BEFORE INSERT ON projet.reservations 
 FOR EACH ROW  
-EXECUTE PROCEDURE projet.calculer_prix_total_reservation(); 
+EXECUTE PROCEDURE projet.before_reservation(); 
+
 
 
 
@@ -371,17 +373,24 @@ EXECUTE PROCEDURE projet.calculer_prix_total_reservation();
 
 
 SELECT projet.ajouter_festival('BRUSSELS SUMMER FESTIVAL') AS id_festival_1;
-SELECT projet.ajouter_salle('SALLE 001', 'Bruxelles', 25000) AS id_salle_1;
-SELECT projet.ajouter_evenement('ANGELE EN FOLIE', '2019-12-28', 60, NULL, 1) AS id_evenement_1;
+SELECT projet.ajouter_salle('SALLE 001', 'Bruxelles', 3) AS id_salle_1;
+SELECT projet.ajouter_salle('SALLE 002', 'Forest', 20000) AS id_salle_2;
+
+SELECT projet.ajouter_evenement('ANGELE EN FOLIE', '2019-12-27', 60, NULL, 1) AS id_evenement_1;
+SELECT projet.ajouter_evenement('NRJ MUSIC AWARDS', '2019-12-26', 60, NULL, 2) AS id_evenement_2;
+SELECT projet.ajouter_evenement('LES ENFOIRES', '2019-12-22', 50, NULL, 2) AS id_evenement_3;
+
 
 SELECT projet.ajouter_artiste('Angele', NULL) AS id_artiste_1;
 SELECT projet.ajouter_artiste('Romeo', NULL) AS id_artiste_2;
 
-SELECT projet.ajouter_concert('17:00:00', 1, 1) AS id_concert_1;
-SELECT projet.ajouter_concert('22:00:00', 1, 2) AS id_concert_2;
-
+SELECT projet.ajouter_concert('17:00:00', 1, 1) AS id_concert_1; -- (id_evenement, id_artiste)
+SELECT projet.ajouter_concert('18:00:00', 1, 2) AS id_concert_2;
+--SELECT projet.ajouter_concert('22:00:00', 2, 2) AS id_concert_3;
 
 SELECT projet.ajouter_client('floriansollami@hotmail.fr', 'fsollam15', 'azerty', 'sel') AS id_client_1;
-SELECT projet.ajouter_reservation(1, 1, 2) AS id_reservation_1;
+SELECT projet.ajouter_client('jacq@hotmail.fr', 'jacq15', 'azerty', 'sel') AS id_client_2;
 
-SELECT * FROM projet.reservations;
+SELECT projet.ajouter_reservation(1, 1, 3) AS id_reservation_1; -- (id_evenement, id_client, nb_tickets)
+--SELECT projet.ajouter_reservation(2, 1, 2) AS id_reservation_2;
+--SELECT projet.ajouter_reservation(1, 2, 4) AS id_reservation_3;
