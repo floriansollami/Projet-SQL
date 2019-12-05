@@ -54,13 +54,12 @@ CREATE TABLE projet.reservations(
 	id_reservation SERIAL,
 	id_evenement INTEGER NOT NULL REFERENCES projet.evenements(id_evenement),
 	id_client INTEGER NOT NULL REFERENCES projet.clients(id_client),
-	nb_tickets_reserves INTEGER NOT NULL DEFAULT 0 CHECK (nb_tickets_reserves BETWEEN 1 AND 4), -- PAS  SUFFISANT VERIFIER EN +
+	nb_tickets_reserves INTEGER NOT NULL DEFAULT 0 CHECK (nb_tickets_reserves BETWEEN 1 AND 4), 
+	prix_total NUMERIC (8, 2) NULL CHECK(prix_total > 0),
 	PRIMARY KEY(id_evenement, id_reservation)
 );
 
 ----------------------------------------------------------------------------------------------------------------------------------------
-
-
 -- AJOUTER FESTIVAL
 CREATE OR REPLACE FUNCTION projet.ajouter_festival(projet.festivals.nom%TYPE) 
 RETURNS projet.festivals.id_festival%TYPE 
@@ -87,8 +86,8 @@ RETURNS projet.salles.id_salle%TYPE
 AS $$
 DECLARE 
        nom_salle ALIAS FOR $1;
-	     ville_salle ALIAS FOR $2;
-	     capacite_salle ALIAS FOR $3;
+	   ville_salle ALIAS FOR $2;
+	   capacite_salle ALIAS FOR $3;
 			 
        no_salle INTEGER; 
 BEGIN
@@ -112,15 +111,15 @@ AS $$
 DECLARE 
        nom_evenement ALIAS FOR $1;
        date ALIAS FOR $2;
-			 prix_evenement ALIAS FOR $3;
-	     no_festival ALIAS FOR $4;
-	     no_salle ALIAS FOR $5;
+	   prix_evenement ALIAS FOR $3;
+	   no_festival ALIAS FOR $4;
+	   no_salle ALIAS FOR $5;
 			 
        no_evenement INTEGER; 
 BEGIN
      INSERT INTO projet.evenements 
-		 VALUES (DEFAULT, nom_evenement, date, prix_evenement, no_festival, no_salle, DEFAULT, DEFAULT) 
-	   RETURNING id_evenement INTO no_evenement;
+	 VALUES (DEFAULT, nom_evenement, date, prix_evenement, no_festival, no_salle, DEFAULT, DEFAULT) 
+	 RETURNING id_evenement INTO no_evenement;
      
      RETURN no_evenement;
 END ; 
@@ -154,12 +153,12 @@ AS $$
 DECLARE 
        heure_debut_concert ALIAS FOR $1;
        no_evenement ALIAS FOR $2;
-	     no_artiste ALIAS FOR $3;
+	   no_artiste ALIAS FOR $3;
 
        no_concert INTEGER; 
 BEGIN
      INSERT INTO projet.concerts VALUES (DEFAULT, heure_debut_concert, no_evenement, no_artiste) 
-	   RETURNING id_concert INTO no_concert;
+	 RETURNING id_concert INTO no_concert;
      
      RETURN no_concert;
 END ; 
@@ -177,8 +176,8 @@ AS $$
 DECLARE 
        email_client ALIAS FOR $1;
        nom_utilisateur_client ALIAS FOR $2;
-	     mot_de_passe_client ALIAS FOR $3;
-	     sel_client ALIAS FOR $4;
+	   mot_de_passe_client ALIAS FOR $3;
+	   sel_client ALIAS FOR $4;
 
        no_client INTEGER; 
 BEGIN
@@ -189,6 +188,9 @@ BEGIN
 END ; 
 $$ LANGUAGE plpgsql;
 
+
+
+	
 -- AJOUTER RESERVATION
 CREATE OR REPLACE FUNCTION projet.ajouter_reservation(
 	projet.reservations.id_evenement%TYPE, 
@@ -200,26 +202,17 @@ AS $$
 DECLARE 
        no_evenement ALIAS FOR $1;
        no_client ALIAS FOR $2;
-			 tickets_reserves ALIAS FOR $3;
+	   tickets_reserves ALIAS FOR $3;
 
        no_reservation INTEGER; 
 BEGIN
-     INSERT INTO projet.reservations VALUES (DEFAULT, no_evenement, no_client, tickets_reserves) 
-	   RETURNING id_reservation INTO no_reservation;
+     INSERT INTO projet.reservations VALUES (DEFAULT, no_evenement, no_client, tickets_reserves, NULL) 
+	 RETURNING id_reservation INTO no_reservation;
      
      RETURN no_reservation;
 END ; 
 $$ LANGUAGE plpgsql;
 
-
-
-SELECT projet.ajouter_festival('BRUSSELS SUMMER FESTIVAL') AS id_festival;
-SELECT projet.ajouter_salle('SALLE 001', 'Bruxelles', 25000) AS id_salle;
-SELECT projet.ajouter_evenement('ANGELE EN FOLIE', '2019-12-28', 60, NULL, 1) AS id_evenement;
-SELECT projet.ajouter_artiste('Angele', NULL) AS id_artiste;
-SELECT projet.ajouter_concert('17:00:00', 1, 1) AS id_concert;
-SELECT projet.ajouter_client('floriansollami@hotmail.fr', 'fsollam15', 'azerty', 'sel') AS id_client;
-SELECT projet.ajouter_reservation(1, 1, 2) AS id_reservation;
 
 
 --Visualiser la liste  des artistes triés par nombre de tickets réservés
@@ -247,8 +240,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
------------------------------------------------------------------------------------
-#TRIGGERS
+
+----TRIGGERS---------------------------------------------------------------------
 
 CREATE OR REPLACE FUNCTION projet.trigger_reservation () RETURNS TRIGGER AS $$
 DECLARE
@@ -301,3 +294,94 @@ $$ LANGUAGE plpgsql;
 
 CREATE TRIGGER projet.trigger_reservation AFTER INSERT ON projet.reservations
 	FOR EACH ROW EXECUTE PROCEDURE; //TODO
+	
+	
+	
+CREATE OR REPLACE FUNCTION projet.incrementer_nb_concerts() RETURNS TRIGGER   
+AS $$ 
+DECLARE 
+       ancien_nb_concerts projet.evenements.nb_concerts%TYPE;
+BEGIN 
+      SELECT nb_concerts FROM projet.evenements 
+	  WHERE id_evenement = NEW.id_evenement INTO ancien_nb_concerts;
+	  
+	  ancien_nb_concerts := ancien_nb_concerts + 1;
+	  
+	  UPDATE projet.evenements SET nb_concerts = ancien_nb_concerts WHERE id_evenement = NEW.id_evenement;
+
+      RETURN NEW; 
+END; 
+$$ LANGUAGE plpgsql; 
+
+CREATE TRIGGER trigger_incrementer_nb_concerts 
+AFTER INSERT ON projet.concerts 
+FOR EACH ROW  
+EXECUTE PROCEDURE projet.incrementer_nb_concerts(); 
+
+
+
+CREATE OR REPLACE FUNCTION projet.incrementer_nb_tickets_reserves_artiste() RETURNS TRIGGER   
+AS $$ 
+DECLARE 
+       record RECORD;
+       ancien_nb_tickets_reserves projet.artistes.nb_tickets_reserves%TYPE;
+	   nouveau_nb_tickets_reserves projet.artistes.nb_tickets_reserves%TYPE;
+BEGIN 
+     FOR record IN SELECT DISTINCT id_artiste FROM projet.concerts WHERE id_evenement = NEW.id_evenement -- j'ai fait distinct mais j'aime pas bizarre
+	 LOOP
+		 SELECT nb_tickets_reserves FROM projet.artistes WHERE id_artiste = record.id_artiste INTO ancien_nb_tickets_reserves;
+		 nouveau_nb_tickets_reserves := ancien_nb_tickets_reserves + NEW.nb_tickets_reserves;
+	 	 
+		 UPDATE projet.artistes SET nb_tickets_reserves = nouveau_nb_tickets_reserves WHERE id_artiste = record.id_artiste;
+     END LOOP;
+	 
+     RETURN NEW; 
+END; 
+$$ LANGUAGE plpgsql; 
+
+CREATE TRIGGER trigger_incrementer_nb_tickets_reserves_artiste
+AFTER INSERT ON projet.reservations 
+FOR EACH ROW  
+EXECUTE PROCEDURE projet.incrementer_nb_tickets_reserves_artiste(); 
+
+
+
+-- Mettre a jour le prix total de la reservation après reservation de tickets
+-- before insert ?
+CREATE OR REPLACE FUNCTION projet.calculer_prix_total_reservation() RETURNS TRIGGER   
+AS $$ 
+DECLARE 
+     
+BEGIN 
+     SELECT NEW.nb_tickets_reserves * prix FROM projet.evenements WHERE id_evenement = NEW.id_evenement INTO NEW.prix_total;
+     RETURN NEW; 
+END; 
+$$ LANGUAGE plpgsql; 
+
+CREATE TRIGGER trigger_calculer_prix_total_reservation
+BEFORE INSERT ON projet.reservations 
+FOR EACH ROW  
+EXECUTE PROCEDURE projet.calculer_prix_total_reservation(); 
+
+
+
+
+
+
+
+
+SELECT projet.ajouter_festival('BRUSSELS SUMMER FESTIVAL') AS id_festival_1;
+SELECT projet.ajouter_salle('SALLE 001', 'Bruxelles', 25000) AS id_salle_1;
+SELECT projet.ajouter_evenement('ANGELE EN FOLIE', '2019-12-28', 60, NULL, 1) AS id_evenement_1;
+
+SELECT projet.ajouter_artiste('Angele', NULL) AS id_artiste_1;
+SELECT projet.ajouter_artiste('Romeo', NULL) AS id_artiste_2;
+
+SELECT projet.ajouter_concert('17:00:00', 1, 1) AS id_concert_1;
+SELECT projet.ajouter_concert('22:00:00', 1, 2) AS id_concert_2;
+
+
+SELECT projet.ajouter_client('floriansollami@hotmail.fr', 'fsollam15', 'azerty', 'sel') AS id_client_1;
+SELECT projet.ajouter_reservation(1, 1, 2) AS id_reservation_1;
+
+SELECT * FROM projet.reservations;
