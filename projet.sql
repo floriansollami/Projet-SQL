@@ -47,7 +47,7 @@ CREATE TABLE projet.clients(
 	id_client SERIAL PRIMARY KEY,
 	email VARCHAR(100) UNIQUE NOT NULL CHECK(email SIMILAR TO '[0-9a-zA-Z]*(.[0-9a-zA-Z]*)*@[0-9a-zA-Z]*(.[0-9a-zA-Z]*)*'),
 	nom_utilisateur VARCHAR(100) UNIQUE NOT NULL CHECK(nom_utilisateur <> ''),
-	mot_de_passe VARCHAR(100) NOT NULL CHECK(mot_de_passe <> ''),
+	mot_de_passe VARCHAR(255) NOT NULL CHECK(mot_de_passe <> ''),
 	sel VARCHAR(255) NOT NULL
 );
 
