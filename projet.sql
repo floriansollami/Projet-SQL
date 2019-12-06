@@ -376,8 +376,8 @@ SELECT projet.ajouter_festival('BRUSSELS SUMMER FESTIVAL') AS id_festival_1;
 SELECT projet.ajouter_salle('SALLE 001', 'Bruxelles', 3) AS id_salle_1;
 SELECT projet.ajouter_salle('SALLE 002', 'Forest', 20000) AS id_salle_2;
 
-SELECT projet.ajouter_evenement('ANGELE EN FOLIE', '2019-12-27', 60, NULL, 1) AS id_evenement_1;
-SELECT projet.ajouter_evenement('NRJ MUSIC AWARDS', '2019-12-26', 60, NULL, 2) AS id_evenement_2;
+SELECT projet.ajouter_evenement('ANGELE EN FOLIE', '2019-12-27', 60, 1, 1) AS id_evenement_1;
+SELECT projet.ajouter_evenement('NRJ MUSIC AWARDS', '2019-12-26', 60, 1, 2) AS id_evenement_2;
 SELECT projet.ajouter_evenement('LES ENFOIRES', '2019-12-22', 50, NULL, 2) AS id_evenement_3;
 
 
@@ -386,7 +386,7 @@ SELECT projet.ajouter_artiste('Romeo', NULL) AS id_artiste_2;
 
 SELECT projet.ajouter_concert('17:00:00', 1, 1) AS id_concert_1; -- (id_evenement, id_artiste)
 SELECT projet.ajouter_concert('18:00:00', 1, 2) AS id_concert_2;
---SELECT projet.ajouter_concert('22:00:00', 2, 2) AS id_concert_3;
+SELECT projet.ajouter_concert('22:00:00', 2, 2) AS id_concert_3;
 
 SELECT projet.ajouter_client('floriansollami@hotmail.fr', 'fsollam15', 'azerty', 'sel') AS id_client_1;
 SELECT projet.ajouter_client('jacq@hotmail.fr', 'jacq15', 'azerty', 'sel') AS id_client_2;
@@ -394,3 +394,138 @@ SELECT projet.ajouter_client('jacq@hotmail.fr', 'jacq15', 'azerty', 'sel') AS id
 SELECT projet.ajouter_reservation(1, 1, 3) AS id_reservation_1; -- (id_evenement, id_client, nb_tickets)
 --SELECT projet.ajouter_reservation(2, 1, 2) AS id_reservation_2;
 --SELECT projet.ajouter_reservation(1, 2, 4) AS id_reservation_3;
+
+
+-- Visualiser la liste des artistes triés par nombre de tickets réservés.
+/*SELECT *
+FROM projet.artistes
+ORDER BY nb_tickets_reserves*/
+
+
+/* Afficher les événements entre deux dates données. Les évènements seront triés par ordre
+chronologique. Pour chaque événement, on affichera son nom, sa date, sa salle, le nom du festival
+(si présent) et le nombre de tickets déjà vendus.
+*/
+/*SELECT EV.nom, EV.date_evenement, SA.nom, FE.nom, EV.nb_tickets_vendus
+FROM projet.evenements EV
+LEFT JOIN projet.festivals FE ON EV.id_festival = FE.id_festival
+LEFT JOIN projet.salles SA ON EV.id_salle = SA.id_salle
+WHERE date_evenement BETWEEN '2019-12-01' AND '2019-12-31'
+ORDER BY EV.date_evenement.
+*/
+
+
+
+					  
+
+
+-- NOTE LES EVENEMENTS QUI NONT PAS DE CONCERTS NE SERONT PAS REPRIS (logique CF jointures)
+CREATE OR REPLACE FUNCTION projet.evenements_salle_par_date() 
+RETURNS SETOF RECORD
+AS $$
+DECLARE 
+	   texte varchar;
+	   sep varchar;
+	   evenement RECORD;
+       sortie RECORD;
+	   concert RECORD;
+	   estComplet BOOLEAN;
+BEGIN
+	 
+     FOR evenement IN (SELECT EV.id_evenement, EV.nom AS "nom_envenement", EV.date_evenement, SA.nom AS "nom_salle", EV.prix, EV.nb_tickets_vendus
+					   FROM projet.evenements EV, projet.salles SA
+					   WHERE EV.id_salle = SA.id_salle
+					   AND EV.nb_concerts != 0
+					  )
+	 	LOOP
+		    texte := '';
+			sep := '';
+			
+			IF (evenement.nb_tickets_vendus = 0) THEN
+				estComplet := TRUE;
+			ELSE
+				estComplet := FALSE;
+			END IF;	
+				
+			FOR concert IN SELECT * FROM projet.concerts CO, projet.artistes AR WHERE CO.id_evenement = evenement.id_evenement AND CO.id_artiste = AR.id_artiste
+			LOOP
+				texte := texte || sep || concert.nom;
+            	sep := ' + ';
+			END LOOP;
+			
+			SELECT evenement.nom_envenement, evenement.date_evenement, evenement.nom_salle, texte, evenement.prix, estComplet INTO sortie;
+			RETURN NEXT sortie; -- ajout du record dans le SETOF RECORD
+	 		
+	 	END LOOP;
+     
+     RETURN; -- renvoyer le SETOF RECORD
+END ; 
+$$ LANGUAGE plpgsql;
+
+-- Pour appeler une procédure qui renvoie un tableau, il faut préciser la structure de chaque colonne ainsi que le type de la colonne.
+SELECT * FROM projet.evenements_salle_par_date() resultats(
+														   nom_envenement VARCHAR(100),
+														   date_evenement DATE,
+														   nom_salle VARCHAR(100),
+														   artistes VARCHAR,
+														   prix NUMERIC (8, 2),
+														   estComplet BOOLEAN
+														  );
+														  
+/*
+-- Voir les événements d’une salle particulière triés par date
+SELECT * FROM projet.evenements_salle_par_date() resultats(
+														   nom_envenement VARCHAR(100),
+														   date_evenement DATE,
+														   nom_salle VARCHAR(100),
+														   artistes VARCHAR,
+														   prix NUMERIC (8, 2),
+														   estComplet BOOLEAN
+														  )
+														  WHERE nom_salle LIKE 'SALLE 002'
+														  ORDER BY date_evenement;*/
+
+-- Voir les événements auxquels participe un artiste particulier triés par date
+/*SELECT * FROM projet.evenements_salle_par_date() resultats(
+														   nom_envenement VARCHAR(100),
+														   date_evenement DATE,
+														   nom_salle VARCHAR(100),
+														   artistes VARCHAR,
+														   prix NUMERIC (8, 2),
+														   estComplet BOOLEAN
+														  )
+														  WHERE artistes LIKE '%Angele%'
+														  ORDER BY date_evenement;*/
+														  
+														  
+														 
+
+
+
+
+/**
+L’utilisateur pourra voir les festivals futurs (festivals pour
+lesquels il existe au moins un événement dans le futur). Les festivals seront affichés avec leur nom, la date
+du premier événement, la date du dernier événement et la somme des prix des tickets de chaque
+événement le composant. Les festivals seront triés par la date du premier événement. Les festivals non
+finalisés (sans événements) ne sont pas affichés.
+*/
+
+/* PRESQUE LA BONNE SOLUTION 
+SELECT FE.id_festival, FE.nom, MIN(EV1.date_evenement), MAX(EV2.date_evenement), SUM(EV1.nb_tickets_vendus * EV1.prix) AS "somme_prix_tickets"
+FROM projet.festivals FE, projet.evenements EV1, projet.evenements EV2
+WHERE FE.id_festival = EV1.id_festival
+AND FE.id_festival = EV2.id_festival
+AND EV1.date_evenement > NOW()
+AND EV2.date_evenement > NOW()
+GROUP BY FE.id_festival, FE.nom, EV1.id_evenement
+ORDER BY MIN(EV1.date_evenement)
+*/
+
+
+
+
+
+
+
+
