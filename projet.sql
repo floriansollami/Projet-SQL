@@ -1,6 +1,7 @@
 DROP SCHEMA IF EXISTS projet CASCADE;
 CREATE SCHEMA projet;
 
+
 CREATE TABLE projet.festivals(
 	id_festival SERIAL PRIMARY KEY,
 	nom VARCHAR(100) NOT NULL CHECK(nom <> '')
@@ -526,6 +527,44 @@ ORDER BY MIN(EV1.date_evenement)
 
 
 
+--  Il verra alors tous les événements du festival 
+--SELECT * FROM projet.evenements WHERE id_festival = 1 ORDER BY id_evenement;
+
+/** l’utilisateur pourra visualiser ses réservations. Les
+réservations seront affichées avec le nom de l’événement, la date de l’événement, la salle, le numéro de
+réservation et le nombre de places réservées. Les réservations seront triées par la date de l’événement
+*/
+/**SELECT EV.nom, EV.date_evenement, SA.nom, RE.id_reservation, RE.nb_tickets_reserves
+FROM projet.reservations RE, projet.evenements EV, projet.salles SA
+WHERE RE.id_evenement = EV.id_evenement
+AND EV.id_salle = SA.id_salle
+ORDER BY EV.date_evenement
+*/
 
 
 
+/**
+GRANT CONNECT ON DATABASE dbnboujta16 TO fsollam15;
+GRANT USAGE ON SCHEMA projet TO fsollam15;
+GRANT SELECT ON projet.festivals, projet.salles, projet.evenements, projet.artistes, projet.concerts, projet.clients, projet.reservations TO fsollam15;  
+GRANT INSERT ON projet.festivals, projet.salles, projet.evenements, projet.artistes, projet.concerts, projet.clients, projet.reservations TO fsollam15;  
+GRANT UPDATE ON projet.evenements, projet.artistes TO fsollam15;
+--GRANT UPDATE ON SEQUENCE projet.utilisateurs_no_utilisateur_seq, projet.objets_vente_no_objet_vente_seq,projet.encheres_no_enchere_seq, projet.evaluations_no_evaluation_seq TO fsollam15;
+GRANT SELECT ON /* QUE LES VIEWS */ TO fsollam15;
+*/
+
+
+-- DEMO
+-- NOTE METTRE LE MDP CRYPTE DE DAMAS ET LE BON SEL (POUR LA DEMO)
+/**SELECT projet.ajouter_client(
+	'christophe.damas@vinci.be', 
+	'damas',
+	'damas',
+	'sel'
+);
+
+SELECT projet.ajouter_artiste('Eminem');
+SELECT projet.ajouter_artiste('Beyoncé');
+SELECT projet.ajouter_salle('Palais 12', 'Bruxelles', 3);
+SELECT projet.ajouter_festival('UCL');
+*/
