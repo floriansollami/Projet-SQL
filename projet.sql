@@ -372,7 +372,7 @@ EXECUTE PROCEDURE projet.before_reservation();
 
 
 
-
+/**
 SELECT projet.ajouter_festival('BRUSSELS SUMMER FESTIVAL') AS id_festival_1;
 SELECT projet.ajouter_salle('SALLE 001', 'Bruxelles', 3) AS id_salle_1;
 SELECT projet.ajouter_salle('SALLE 002', 'Forest', 20000) AS id_salle_2;
@@ -396,11 +396,21 @@ SELECT projet.ajouter_reservation(1, 1, 3) AS id_reservation_1; -- (id_evenement
 --SELECT projet.ajouter_reservation(2, 1, 2) AS id_reservation_2;
 --SELECT projet.ajouter_reservation(1, 2, 4) AS id_reservation_3;
 
+*/
+
 
 -- Visualiser la liste des artistes triés par nombre de tickets réservés.
-/*SELECT *
-FROM projet.artistes
-ORDER BY nb_tickets_reserves*/
+
+CREATE VIEW projet.artistes_nb_tickets_reserves AS
+	SELECT id_artiste AS "no_artiste", nom AS "nom_artiste", nationalite AS "nationalite_artiste", nb_tickets_reserves AS "nb_tickets_reserves_artistes"
+	FROM projet.artistes
+	ORDER BY nb_tickets_reserves;
+	
+--SELECT * FROM projet.artistes_nb_tickets_reserves;
+	
+	
+	
+
 
 
 /* Afficher les événements entre deux dates données. Les évènements seront triés par ordre
@@ -421,7 +431,7 @@ ORDER BY EV.date_evenement.
 
 
 -- NOTE LES EVENEMENTS QUI NONT PAS DE CONCERTS NE SERONT PAS REPRIS (logique CF jointures)
-CREATE OR REPLACE FUNCTION projet.evenements_salle_par_date() 
+/*CREATE OR REPLACE FUNCTION projet.evenements_salle_par_date() 
 RETURNS SETOF RECORD
 AS $$
 DECLARE 
@@ -461,17 +471,17 @@ BEGIN
      
      RETURN; -- renvoyer le SETOF RECORD
 END ; 
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql;*/
 
 -- Pour appeler une procédure qui renvoie un tableau, il faut préciser la structure de chaque colonne ainsi que le type de la colonne.
-SELECT * FROM projet.evenements_salle_par_date() resultats(
+/*SELECT * FROM projet.evenements_salle_par_date() resultats(
 														   nom_envenement VARCHAR(100),
 														   date_evenement DATE,
 														   nom_salle VARCHAR(100),
 														   artistes VARCHAR,
 														   prix NUMERIC (8, 2),
 														   estComplet BOOLEAN
-														  );
+														  );*/
 														  
 /*
 -- Voir les événements d’une salle particulière triés par date
@@ -562,7 +572,6 @@ GRANT SELECT ON /* QUE LES VIEWS */ TO fsollam15;
 	'damas',
 	'sel'
 );
-
 SELECT projet.ajouter_artiste('Eminem');
 SELECT projet.ajouter_artiste('Beyoncé');
 SELECT projet.ajouter_salle('Palais 12', 'Bruxelles', 3);
