@@ -372,7 +372,7 @@ EXECUTE PROCEDURE projet.before_reservation();
 
 
 
-/**
+
 SELECT projet.ajouter_festival('BRUSSELS SUMMER FESTIVAL') AS id_festival_1;
 SELECT projet.ajouter_salle('SALLE 001', 'Bruxelles', 3) AS id_salle_1;
 SELECT projet.ajouter_salle('SALLE 002', 'Forest', 20000) AS id_salle_2;
@@ -396,7 +396,7 @@ SELECT projet.ajouter_reservation(1, 1, 3) AS id_reservation_1; -- (id_evenement
 --SELECT projet.ajouter_reservation(2, 1, 2) AS id_reservation_2;
 --SELECT projet.ajouter_reservation(1, 2, 4) AS id_reservation_3;
 
-*/
+
 
 
 -- Visualiser la liste des artistes triés par nombre de tickets réservés.
@@ -417,13 +417,19 @@ CREATE VIEW projet.artistes_nb_tickets_reserves AS
 chronologique. Pour chaque événement, on affichera son nom, sa date, sa salle, le nom du festival
 (si présent) et le nombre de tickets déjà vendus.
 */
-/*SELECT EV.nom, EV.date_evenement, SA.nom, FE.nom, EV.nb_tickets_vendus
-FROM projet.evenements EV
-LEFT JOIN projet.festivals FE ON EV.id_festival = FE.id_festival
-LEFT JOIN projet.salles SA ON EV.id_salle = SA.id_salle
-WHERE date_evenement BETWEEN '2019-12-01' AND '2019-12-31'
-ORDER BY EV.date_evenement.
-*/
+
+
+
+CREATE VIEW projet.evenements_entre_deux_dates AS
+	SELECT EV.nom AS "nom_evenement", EV.date_evenement AS "date", SA.nom AS "nom_salle",
+	FE.nom AS "nom_festival", EV.nb_tickets_vendus AS "nombre_tickets_vendus"
+	FROM projet.evenements EV
+	LEFT JOIN projet.festivals FE ON EV.id_festival = FE.id_festival
+	LEFT JOIN projet.salles SA ON EV.id_salle = SA.id_salle
+	ORDER BY EV.date_evenement;
+
+--SELECT * FROM projet.evenements_entre_deux_dates WHERE date BETWEEN '2019-12-01' AND '2019-12-31'; 
+
 
 
 
@@ -483,7 +489,7 @@ $$ LANGUAGE plpgsql;*/
 														   estComplet BOOLEAN
 														  );*/
 														  
-/*
+/**
 -- Voir les événements d’une salle particulière triés par date
 SELECT * FROM projet.evenements_salle_par_date() resultats(
 														   nom_envenement VARCHAR(100),
@@ -497,7 +503,7 @@ SELECT * FROM projet.evenements_salle_par_date() resultats(
 														  ORDER BY date_evenement;*/
 
 -- Voir les événements auxquels participe un artiste particulier triés par date
-/*SELECT * FROM projet.evenements_salle_par_date() resultats(
+/**SELECT * FROM projet.evenements_salle_par_date() resultats(
 														   nom_envenement VARCHAR(100),
 														   date_evenement DATE,
 														   nom_salle VARCHAR(100),
@@ -544,6 +550,7 @@ ORDER BY MIN(EV1.date_evenement)
 réservations seront affichées avec le nom de l’événement, la date de l’événement, la salle, le numéro de
 réservation et le nombre de places réservées. Les réservations seront triées par la date de l’événement
 */
+
 /**SELECT EV.nom, EV.date_evenement, SA.nom, RE.id_reservation, RE.nb_tickets_reserves
 FROM projet.reservations RE, projet.evenements EV, projet.salles SA
 WHERE RE.id_evenement = EV.id_evenement
@@ -566,10 +573,12 @@ GRANT SELECT ON /* QUE LES VIEWS */ TO fsollam15;
 
 -- DEMO
 -- NOTE METTRE LE MDP CRYPTE DE DAMAS ET LE BON SEL (POUR LA DEMO)
-/**SELECT projet.ajouter_client(
+
+/**
+SELECT projet.ajouter_client(
 	'christophe.damas@vinci.be', 
-	'damas',
-	'damas',
+	'$2a$10$aZ96YC6rY1cfiuDxAfg4EO', // correspond à "damas"
+	'$2a$10$aZ96YC6rY1cfiuDxAfg4EO', // correspond a "damas"
 	'sel'
 );
 SELECT projet.ajouter_artiste('Eminem');
